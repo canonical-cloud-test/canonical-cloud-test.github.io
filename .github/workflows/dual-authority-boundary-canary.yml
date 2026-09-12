@@ -24,6 +24,20 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install exact TJSV source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool="$RUNNER_TEMP/tjsv-tool"
+          mkdir -p "$tool"
+          cd "$tool"
+          npm init -y >/dev/null
+          npm install --no-save \
+            'git+https://github.com/ORESoftware/typespec-json-schema-validator.git#93dd73cb246a09b0a1c62d7192cc62ca6ecbe405'
+          test -x "$tool/node_modules/.bin/tjsv"
+          "$tool/node_modules/.bin/tjsv" doctor
+          printf 'TJSV_BIN=%s\n' "$tool/node_modules/.bin/tjsv" >> "$GITHUB_ENV"
+
       - name: Build independent TypeSpec and JSON Schema authority fixture
         shell: bash
         run: |
@@ -92,17 +106,20 @@ jobs:
           printf 'PEER_ROOT=%s\n' "$root" >> "$GITHUB_ENV"
 
       - name: Require current TJSV convergence and generated Schema B
-        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
-        with:
-          typespec: ${{ env.PEER_ROOT }}/contracts/typespec/main.tsp
-          schema: ${{ env.PEER_ROOT }}/contracts/json-schema
-          instances: ${{ env.PEER_ROOT }}/contracts/fixtures
-          report: ${{ env.PEER_ROOT }}/evidence/report.json
-          sarif: ${{ env.PEER_ROOT }}/evidence/report.sarif
-          contract_ir: ${{ env.PEER_ROOT }}/evidence/contract-ir.json
-          output_dir: ${{ env.PEER_ROOT }}/evidence/generated
-          int64_strategy: string
-          quiet: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$PEER_ROOT/evidence"
+          "$TJSV_BIN" check \
+            --typespec="$PEER_ROOT/contracts/typespec/main.tsp" \
+            --schema="$PEER_ROOT/contracts/json-schema" \
+            --instances="$PEER_ROOT/contracts/fixtures" \
+            --report="$PEER_ROOT/evidence/report.json" \
+            --sarif="$PEER_ROOT/evidence/report.sarif" \
+            --contract-ir="$PEER_ROOT/evidence/contract-ir.json" \
+            --output-dir="$PEER_ROOT/evidence/generated" \
+            --int64-strategy=string \
+            --quiet=false
 
       - name: Assert independent-authority roles and comparison evidence
         shell: bash
