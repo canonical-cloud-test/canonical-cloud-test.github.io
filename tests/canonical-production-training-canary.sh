@@ -50,24 +50,31 @@ clone_exact "$MARKETING_REPO" "$MARKETING_SHA" "$out/marketing"
 web_training="$out/web/src/routes/training.rs"
 web_routes="$out/web/src/routes/mod.rs"
 marketing_training="$out/marketing/src/pages/training.astro"
+web_training_production="$out/web-training-production.rs"
 
 test -f "$web_training"
 test -f "$web_routes"
 test -f "$marketing_training"
 
+# Rust tests intentionally contain negative claim strings. The product contract
+# is the production source before the conventional #[cfg(test)] module.
+sed '/#\[cfg(test)\]/,$d' "$web_training" > "$web_training_production"
+
 # Rust/Maud product authority.
-require_text "$web_training" 'Turn compliance into a competitive advantage'
-require_text "$web_training" 'SOC 2 Foundations'
-require_text "$web_training" 'Control Owner Workshop'
-require_text "$web_training" 'Audit Readiness Bootcamp'
-require_text "$web_training" 'Readiness, not assurance.'
-require_text "$web_training" 'Start your readiness assessment'
-require_text "$web_training" 'Talk to an expert'
-require_text "$web_training" '.route("/training", get(page))'
-require_text "$web_training" '.route("/training/", get(page))'
+require_text "$web_training_production" 'Turn compliance into a competitive advantage'
+require_text "$web_training_production" 'SOC 2 Foundations'
+require_text "$web_training_production" 'Control Owner Workshop'
+require_text "$web_training_production" 'Audit Readiness Bootcamp'
+require_text "$web_training_production" 'Readiness, not assurance.'
+require_text "$web_training_production" 'Start your readiness assessment'
+require_text "$web_training_production" 'Talk to an expert'
+require_text "$web_training_production" '.route("/training", get(page))'
+require_text "$web_training_production" '.route("/training/", get(page))'
 require_text "$web_routes" '.merge(training::router())'
-forbid_text "$web_training" '85% faster'
-forbid_text "$web_training" 'guaranteed clean'
+forbid_text "$web_training_production" '85% faster'
+forbid_text "$web_training_production" 'guaranteed clean'
+# Keep the regression guard that explicitly rejects the unsupported metric.
+require_text "$web_training" 'assert!(!rendered.contains("85% faster"));'
 
 # Public marketing discovery/interactive surface points into the Rust authority.
 require_text "$marketing_training" "const appTrainingHref = 'https://app.canonical.plus/training';"
