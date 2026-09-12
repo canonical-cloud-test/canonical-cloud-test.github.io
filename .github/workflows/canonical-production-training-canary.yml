@@ -1,0 +1,36 @@
+name: canonical-production-training-canary
+
+on:
+  push:
+    branches:
+      - DEN-3828-production-training-canary
+  pull_request:
+    paths:
+      - tests/canonical-production-training-canary.sh
+      - .github/workflows/canonical-production-training-canary.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Check out canary repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate canary syntax
+        run: bash -n tests/canonical-production-training-canary.sh
+
+      - name: Verify exact production training contract
+        run: bash tests/canonical-production-training-canary.sh "$RUNNER_TEMP/canonical-production-training"
+
+      - name: Prove canary is source-clean
+        run: |
+          set -euo pipefail
+          git diff --exit-code HEAD
+          test -z "$(git status --porcelain)"
