@@ -1,0 +1,59 @@
+name: public-readiness-fixtures
+
+on:
+  push:
+    branches:
+      - DEN-3828-public-readiness-lint-fixtures
+  pull_request:
+    paths:
+      - tests/public-readiness-fixtures.sh
+      - .github/workflows/public-readiness-fixtures.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact fixture source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate generator syntax
+        run: bash -n tests/public-readiness-fixtures.sh
+
+      - name: Generate fixture repositories
+        run: bash tests/public-readiness-fixtures.sh "$RUNNER_TEMP/readiness-fixtures"
+
+      - name: Verify positive and negative fixture contract
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/readiness-fixtures"
+          for fixture in \
+            pass-astro \
+            fail-missing-boundary \
+            fail-forbidden-outcome \
+            fail-unsubstantiated-metric
+          do
+            test -f "$root/$fixture/README.md"
+            test -f "$root/$fixture/LICENSE"
+            test -f "$root/$fixture/AGENTS.md"
+            test -f "$root/$fixture/.github/README.md"
+          done
+          test -f "$root/pass-astro/src/pages/training.astro"
+          test -f "$root/pass-astro/docs/claims/training-speed.md"
+          grep -F 'ores-claim-substantiation: docs/claims/training-speed.md' "$root/pass-astro/src/pages/training.astro"
+          grep -F '60% faster' "$root/pass-astro/src/pages/training.astro"
+          grep -F 'SOC 2 compliance training' "$root/fail-missing-boundary/src/pages/training.astro"
+          grep -F 'Guaranteed compliance and SOC 2 certified' "$root/fail-forbidden-outcome/src/pages/readiness.astro"
+          grep -F '85% faster' "$root/fail-unsubstantiated-metric/src/pages/training.astro"
+
+      - name: Prove generator is source-clean
+        run: |
+          set -euo pipefail
+          git diff --exit-code HEAD
+          test -z "$(git status --porcelain)"
