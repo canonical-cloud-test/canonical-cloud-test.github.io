@@ -1,0 +1,130 @@
+name: dual-authority-boundary-canary
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/dual-authority-boundary-canary.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact canary source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js for TypeSpec
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Build independent TypeSpec and JSON Schema authority fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/peer-contract"
+          mkdir -p "$root/contracts/typespec" "$root/contracts/json-schema" \
+            "$root/contracts/fixtures/ReadinessOffering/valid" \
+            "$root/contracts/fixtures/ReadinessOffering/invalid"
+          cat > "$root/contracts/typespec/main.tsp" <<'TSP'
+          import "@typespec/json-schema";
+          using TypeSpec.JsonSchema;
+
+          namespace CanonicalTest;
+
+          @id("ReadinessLevel")
+          enum ReadinessLevel {
+            baseline: "baseline",
+            advanced: "advanced",
+          }
+
+          @id("ReadinessOffering")
+          model ReadinessOffering {
+            name: string;
+            level: ReadinessLevel;
+
+            @minValue(0)
+            checks?: int32;
+          }
+          TSP
+          cat > "$root/contracts/json-schema/authored.schema.json" <<'JSON'
+          {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "canonical-test.readiness.schema.json",
+            "$defs": {
+              "ReadinessLevel": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "$id": "ReadinessLevel",
+                "type": "string",
+                "enum": ["baseline", "advanced"]
+              },
+              "ReadinessOffering": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "$id": "ReadinessOffering",
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "level": { "$ref": "ReadinessLevel" },
+                  "checks": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  }
+                },
+                "required": ["name", "level"],
+                "unevaluatedProperties": false
+              }
+            }
+          }
+          JSON
+          cat > "$root/contracts/fixtures/ReadinessOffering/valid/minimal.json" <<'JSON'
+          {"name":"Readiness Core","level":"baseline","checks":0}
+          JSON
+          cat > "$root/contracts/fixtures/ReadinessOffering/invalid/negative-checks.json" <<'JSON'
+          {"name":"Readiness Core","level":"baseline","checks":-1}
+          JSON
+          printf 'PEER_ROOT=%s\n' "$root" >> "$GITHUB_ENV"
+
+      - name: Require current TJSV convergence and generated Schema B
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: ${{ env.PEER_ROOT }}/contracts/typespec/main.tsp
+          schema: ${{ env.PEER_ROOT }}/contracts/json-schema
+          instances: ${{ env.PEER_ROOT }}/contracts/fixtures
+          report: ${{ env.PEER_ROOT }}/evidence/report.json
+          sarif: ${{ env.PEER_ROOT }}/evidence/report.sarif
+          contract_ir: ${{ env.PEER_ROOT }}/evidence/contract-ir.json
+          output_dir: ${{ env.PEER_ROOT }}/evidence/generated
+          int64_strategy: string
+          quiet: "false"
+
+      - name: Assert independent-authority roles and comparison evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '
+            .status == "passed" and
+            .zeroUnexplainedFindings == true and
+            .authorities.precedence == "none" and
+            .authorities.typespec.authority == "independently-authored" and
+            .authorities.jsonSchema.authority == "independently-authored" and
+            .authorities.typespec.generatedJsonSchemaRole == "comparison-evidence-only"
+          ' "$PEER_ROOT/evidence/report.json"
+          test -s "$PEER_ROOT/evidence/contract-ir.json"
+          find "$PEER_ROOT/evidence/generated" -type f -name '*.json' -print -quit | grep -q .
+
+      - name: Retain test-org evidence
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dual-authority-boundary-${{ github.run_id }}
+          path: ${{ env.PEER_ROOT }}/evidence
+          if-no-files-found: warn
+          retention-days: 30
