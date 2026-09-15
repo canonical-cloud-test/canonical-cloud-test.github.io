@@ -1,0 +1,71 @@
+name: company-readiness-canary
+
+on:
+  pull_request:
+    paths:
+      - tests/company-readiness/**
+      - .github/workflows/company-readiness-canary.yml
+  push:
+    branches: [main]
+    paths:
+      - tests/company-readiness/**
+      - .github/workflows/company-readiness-canary.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out public canary snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out exact Canonical auditor source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: canonical-cloud/canonical-company-auditor.rs
+          ref: d981c0d26be8cafa7a6de12db8fc44cb989f093a
+          path: source/company-auditor
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.95.0
+
+      - name: Test exact auditor source
+        run: cargo test --locked --all-targets --manifest-path source/company-auditor/Cargo.toml
+
+      - name: Validate public-safe snapshot
+        run: >-
+          cargo run --locked --manifest-path source/company-auditor/Cargo.toml --
+          validate
+          --manifest tests/company-readiness/company.json
+          --evidence tests/company-readiness/evidence.json
+
+      - name: Run NIST, SOC 2, and ISO public-scope readiness canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/canonical-company-readiness.md"
+          cargo run --locked --manifest-path source/company-auditor/Cargo.toml -- \
+            assess \
+            --manifest tests/company-readiness/company.json \
+            --evidence tests/company-readiness/evidence.json \
+            --format markdown \
+            --fail-on never \
+            --output "$report"
+          test -s "$report"
+          grep -F 'change.protected-paths' "$report"
+          {
+            echo '# Canonical Cloud public-scope readiness canary'
+            echo
+            echo '> This public canary validates the pinned assessment machinery against public repository metadata only. Unknown means missing current evidence; this is not independent assurance, certification, authorization, or a full-company assessment.'
+            echo
+            cat "$report"
+          } >> "$GITHUB_STEP_SUMMARY"
