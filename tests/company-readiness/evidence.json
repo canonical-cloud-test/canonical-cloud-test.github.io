@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "canonical.evidence-bundle/v1",
+  "tenantId": "canonical-cloud-public-canary",
+  "scopeId": "organization/canonical-cloud/public-engineering-governance",
+  "observations": [
+    {
+      "externalId": "canonical-public-protected-change-sample-2026-09-15",
+      "evidenceType": "change.protection",
+      "subject": "organization/canonical-cloud/public-engineering-governance/repositories/governance-sample",
+      "source": { "kind": "manual", "submittedBy": "canonical-readiness-review" },
+      "collectedAt": 1789498800,
+      "validUntil": 1792022400,
+      "facts": { "protected_path_percent": 0 }
+    }
+  ]
+}
