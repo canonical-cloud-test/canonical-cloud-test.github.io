@@ -70,10 +70,68 @@ jobs:
           test -s "$report"
           cat "$report"
           grep -F 'change.protected-paths' "$report"
+          for framework in \
+            iso-iec-27001-2022 \
+            nist-800-53-r5 \
+            nist-csf-2.0 \
+            soc2-tsc-2017-2022; do
+            grep -F "\`$framework\`" "$report"
+          done
           {
             echo '# Canonical Cloud public-scope readiness canary'
             echo
             echo '> This public canary validates the pinned assessment machinery against public repository metadata only. Unknown means missing current evidence; this is not independent assurance, certification, authorization, or a full-company assessment.'
             echo
             cat "$report"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Exercise all built-in framework mappings without asserting applicability
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapping_evidence="$RUNNER_TEMP/mapping-evidence.json"
+          mapping_report="$RUNNER_TEMP/all-framework-mappings.md"
+          python3 - <<'PY' > "$mapping_evidence"
+          import json
+          source = json.load(open('tests/company-readiness/evidence.json', encoding='utf-8'))
+          source['tenantId'] = 'canonical-cloud-public-mapping-canary'
+          source['scopeId'] = 'organization/canonical-cloud/public-mapping-coverage'
+          for observation in source['observations']:
+              observation['subject'] = observation['subject'].replace(
+                  'organization/canonical-cloud/public-engineering-governance',
+                  'organization/canonical-cloud/public-mapping-coverage',
+                  1,
+              )
+          print(json.dumps(source, indent=2, sort_keys=True))
+          PY
+          cargo run --locked --manifest-path source/company-auditor/Cargo.toml -- \
+            validate \
+            --manifest tests/company-readiness/company-all-framework-mappings.json \
+            --evidence "$mapping_evidence"
+          cargo run --locked --manifest-path source/company-auditor/Cargo.toml -- \
+            assess \
+            --manifest tests/company-readiness/company-all-framework-mappings.json \
+            --evidence "$mapping_evidence" \
+            --format markdown \
+            --fail-on never \
+            --output "$mapping_report"
+          for framework in \
+            cis-controls-8.1 \
+            gdpr-2016-679 \
+            hipaa-security-rule \
+            iso-iec-27001-2022 \
+            nist-800-53-r5 \
+            nist-ai-rmf-1.0 \
+            nist-csf-2.0 \
+            pci-dss-4.0.1 \
+            soc2-tsc-2017-2022; do
+            grep -F "\`$framework\`" "$mapping_report"
+          done
+          {
+            echo
+            echo '## All-framework mapping coverage'
+            echo
+            echo '> Mapping coverage only. Inclusion here does not establish legal, contractual, regulatory, certification, or business applicability to Canonical Cloud.'
+            echo
+            sed -n '/## Framework profiles/,/## Findings/p' "$mapping_report"
           } >> "$GITHUB_STEP_SUMMARY"
