@@ -20,10 +20,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - name: Check out public canary snapshot
+      - name: Check out exact public canary snapshot
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+
+      - name: Assert exact-head checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Check out exact Canonical auditor source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,6 +68,7 @@ jobs:
             --fail-on never \
             --output "$report"
           test -s "$report"
+          cat "$report"
           grep -F 'change.protected-paths' "$report"
           {
             echo '# Canonical Cloud public-scope readiness canary'
