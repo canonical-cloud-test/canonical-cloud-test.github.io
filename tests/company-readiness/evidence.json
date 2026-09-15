@@ -6,7 +6,7 @@
     {
       "externalId": "canonical-public-protected-change-sample-2026-09-15",
       "evidenceType": "change.protection",
-      "subject": "organization/canonical-cloud/public-repositories/governance-sample",
+      "subject": "organization/canonical-cloud/public-engineering-governance/repositories/governance-sample",
       "source": { "kind": "manual", "submittedBy": "canonical-readiness-review" },
       "collectedAt": 1789498800,
       "validUntil": 1792022400,
