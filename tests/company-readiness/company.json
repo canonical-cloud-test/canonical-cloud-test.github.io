@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "canonical.company-audit/v1",
+  "tenantId": "canonical-cloud-public-canary",
+  "scopeId": "organization/canonical-cloud/public-engineering-governance",
+  "companyName": "Canonical Cloud — public engineering/governance readiness canary",
+  "frameworks": [
+    "iso-iec-27001-2022",
+    "nist-800-53-r5",
+    "nist-csf-2.0",
+    "soc2-tsc-2017-2022"
+  ],
+  "assessmentPeriod": {
+    "startsAt": 1788220800,
+    "endsAt": 1789498800
+  },
+  "scope": {
+    "businessUnits": ["Engineering", "Security"],
+    "systems": ["Public Canonical Cloud GitHub governance and assessment repositories"],
+    "dataClasses": ["Public repository metadata"],
+    "vendors": ["GitHub"],
+    "jurisdictions": ["Not assessed by this public canary"],
+    "owners": ["engineering", "security"]
+  }
+}
