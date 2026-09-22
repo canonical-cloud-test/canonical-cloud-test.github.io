@@ -1,0 +1,59 @@
+name: certify ores-stack PPR HTTP framing
+
+on:
+  push:
+    branches:
+      - certify/ores-stack-ppr-http-196
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-1-88:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out certification harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Check out exact ores-stack candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ORESoftware/ores-stack
+          ref: bcd4f4a55be789514323fea35521db80aab15dfd
+          path: ores-stack
+          persist-credentials: false
+          show-progress: false
+
+      - name: Install Rust 1.88.0 with rustfmt and clippy
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.88.0
+          components: rustfmt, clippy
+
+      - name: Bootstrap exact workspace lock
+        working-directory: ores-stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/bootstrap-cargo-lock.sh ensure
+          cargo metadata --locked --format-version 1 --no-deps >/dev/null
+
+      - name: Check PPR HTTP formatting
+        working-directory: ores-stack
+        run: cargo fmt -p ores-stack-ppr-http -- --check
+
+      - name: Check PPR HTTP crate
+        working-directory: ores-stack
+        run: cargo check --locked -p ores-stack-ppr-http --all-targets
+
+      - name: Clippy PPR HTTP crate
+        working-directory: ores-stack
+        run: cargo clippy --locked -p ores-stack-ppr-http --all-targets -- -D warnings
+
+      - name: Test PPR HTTP crate
+        working-directory: ores-stack
+        run: cargo test --locked -p ores-stack-ppr-http
